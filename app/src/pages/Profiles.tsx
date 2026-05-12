@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { api, type Profile, type ProfileAuth } from "../lib/api";
+import { db } from "../lib/db";
+import { api, type ProfileAuth } from "../lib/api";
 
-type ProfileMap = Record<string, Profile>;
+interface LocalProfile {
+  vars_json: string;
+  auth_json: string | null;
+}
+
+type ProfileMap = Record<string, LocalProfile>;
 
 interface EditorState {
-  name: string;
-  vars: string;
-  authKind: string;
+  name:       string;
+  vars:       string;
+  authKind:   string;
   authConfig: string;
 }
 
@@ -14,16 +20,20 @@ function emptyEditor(name = ""): EditorState {
   return { name, vars: "{}", authKind: "", authConfig: "{}" };
 }
 
-function profileToEditor(name: string, p: Profile): EditorState {
+function rowToEditor(name: string, p: LocalProfile): EditorState {
+  const vars = JSON.parse(p.vars_json || "{}");
+  const auth = p.auth_json ? JSON.parse(p.auth_json) : null;
   return {
     name,
-    vars: JSON.stringify(p.vars ?? {}, null, 2),
-    authKind: p.auth?.kind ?? "",
-    authConfig: JSON.stringify(p.auth?.config ?? {}, null, 2),
+    vars:       JSON.stringify(vars, null, 2),
+    authKind:   auth?.kind ?? "",
+    authConfig: JSON.stringify(auth?.config ?? {}, null, 2),
   };
 }
 
-function parseEditor(s: EditorState): { vars: Record<string, unknown>; auth: ProfileAuth | null } | string {
+function parseEditor(
+  s: EditorState,
+): { vars: Record<string, unknown>; auth: ProfileAuth | null } | string {
   let vars: Record<string, unknown>;
   try {
     vars = JSON.parse(s.vars || "{}");
@@ -49,9 +59,9 @@ function ProfileEditor({
   onSave,
   onCancel,
 }: {
-  initial: EditorState;
-  isNew: boolean;
-  onSave: (state: EditorState) => void;
+  initial:  EditorState;
+  isNew:    boolean;
+  onSave:   (state: EditorState) => void;
   onCancel: () => void;
 }) {
   const [state, setState] = useState(initial);
@@ -95,7 +105,9 @@ function ProfileEditor({
       </div>
       {state.authKind && (
         <div>
-          <div className="mb-0.5 text-[10px] uppercase tracking-wider text-zinc-500">Auth config (JSON)</div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-wider text-zinc-500">
+            Auth config (JSON)
+          </div>
           <textarea
             value={state.authConfig}
             onChange={(e) => set({ authConfig: e.target.value })}
@@ -121,15 +133,17 @@ function ProfileEditor({
 
 export default function ProfilesPage() {
   const [profiles, setProfiles] = useState<ProfileMap>({});
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<string | "new" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [editing, setEditing]   = useState<string | "new" | null>(null);
+  const [error, setError]       = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api.profiles.list();
-      setProfiles(data.profiles ?? {});
+      const rows = await db.profiles.list();
+      const map: ProfileMap = {};
+      for (const r of rows) map[r.name] = { vars_json: r.vars_json, auth_json: r.auth_json };
+      setProfiles(map);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -141,13 +155,18 @@ export default function ProfilesPage() {
 
   const handleSave = async (state: EditorState) => {
     const parsed = parseEditor(state);
-    if (typeof parsed === "string") {
-      setError(parsed);
-      return;
-    }
+    if (typeof parsed === "string") { setError(parsed); return; }
     setError(null);
     try {
-      await api.profiles.upsert(state.name, parsed.vars, parsed.auth);
+      const varsJson = JSON.stringify(parsed.vars);
+      const authJson = parsed.auth ? JSON.stringify(parsed.auth) : null;
+
+      // SQLite is source of truth.
+      await db.profiles.upsert(state.name, varsJson, authJson);
+
+      // Sync to daemon so it can use the profile for in-flight requests.
+      await api.profiles.upsert(state.name, parsed.vars, parsed.auth ?? null);
+
       await load();
       setEditing(null);
     } catch (e) {
@@ -157,7 +176,8 @@ export default function ProfilesPage() {
 
   const handleDelete = async (name: string) => {
     try {
-      await api.profiles.delete(name);
+      await db.profiles.delete(name);
+      await api.profiles.delete(name).catch(() => {}); // best-effort daemon sync
       await load();
     } catch (e) {
       setError(String(e));
@@ -170,7 +190,7 @@ export default function ProfilesPage() {
     <div className="flex h-full flex-col p-4">
       <div className="mb-4 flex items-center gap-2">
         <span className="text-sm text-zinc-400">
-          {names.length} profile{names.length !== 1 ? "s" : ""} in ~/.xray/profiles.yml
+          {names.length} profile{names.length !== 1 ? "s" : ""} — stored in xray.db
         </span>
         <button
           onClick={() => setEditing("new")}
@@ -196,16 +216,18 @@ export default function ProfilesPage() {
       )}
 
       {loading && !names.length ? (
-        <div className="text-xs text-zinc-600">Loading...</div>
+        <div className="text-xs text-zinc-600">Loading…</div>
       ) : (
         <div className="space-y-2">
           {names.map((name) => {
             const p = profiles[name];
+            const vars = JSON.parse(p.vars_json || "{}");
+            const auth = p.auth_json ? JSON.parse(p.auth_json) : null;
             return (
               <div key={name} className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
                 {editing === name ? (
                   <ProfileEditor
-                    initial={profileToEditor(name, p)}
+                    initial={rowToEditor(name, p)}
                     isNew={false}
                     onSave={handleSave}
                     onCancel={() => setEditing(null)}
@@ -214,18 +236,18 @@ export default function ProfilesPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-mono text-sm text-zinc-200">{name}</div>
-                      {Object.keys(p.vars ?? {}).length > 0 && (
+                      {Object.keys(vars).length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                          {Object.entries(p.vars).map(([k, v]) => (
+                          {Object.entries(vars).map(([k, v]) => (
                             <span key={k} className="font-mono text-xs text-zinc-500">
                               {k}={String(v)}
                             </span>
                           ))}
                         </div>
                       )}
-                      {p.auth && (
+                      {auth && (
                         <div className="mt-1 text-xs text-zinc-500">
-                          auth: <span className="text-zinc-300">{p.auth.kind}</span>
+                          auth: <span className="text-zinc-300">{auth.kind}</span>
                         </div>
                       )}
                     </div>
@@ -249,7 +271,9 @@ export default function ProfilesPage() {
             );
           })}
           {!names.length && !editing && (
-            <div className="text-xs text-zinc-600">No profiles yet. Click "+ New profile" to create one.</div>
+            <div className="text-xs text-zinc-600">
+              No profiles yet. Click "+ New profile" to create one.
+            </div>
           )}
         </div>
       )}
