@@ -1,0 +1,74 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux
+          - os: windows-latest
+            target: windows
+          - os: macos-13
+            target: macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: linux deps
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: install python deps
+        working-directory: core
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" pyinstaller
+
+      - name: build xrayd sidecar
+        working-directory: core
+        run: pyinstaller xrayd.spec --clean
+
+      - name: place sidecar binary for tauri
+        shell: bash
+        run: |
+          mkdir -p app/src-tauri/binaries
+          host_triple=$(rustc -vV | sed -n 's|host: ||p')
+          src=core/dist/xrayd
+          [ "${{ matrix.target }}" = "windows" ] && src=core/dist/xrayd.exe
+          dest_ext=""
+          [ "${{ matrix.target }}" = "windows" ] && dest_ext=".exe"
+          cp "$src" "app/src-tauri/binaries/xrayd-${host_triple}${dest_ext}"
+
+      - name: install npm deps
+        working-directory: app
+        run: npm install
+
+      - name: tauri build
+        working-directory: app
+        run: npx tauri build
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-${{ matrix.target }}
+          path: |
+            app/src-tauri/target/release/bundle/**/*

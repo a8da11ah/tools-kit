@@ -1,0 +1,42 @@
+
+## Feature List
+- **Environment Profiles** – Switchable configs (local, staging, prod) for endpoints, credentials, and headers.
+- **Payload Templating (Jinja2)** – Dynamic request bodies with built-in variables (`{{ timestamp }}`, `{{ random_id }}`).
+- **Universal Tracing** – `--verbose` flag shows raw protocol exchange with syntax highlighting for every client.
+- **Parallel Health Check** – `check` command to probe multiple services simultaneously and display a status dashboard.
+
+## Implementation Roadmap (7 Steps)
+### 1. Scaffold the CLI
+- Set up project with Typer.
+- Create main app and group commands.
+- Implement `smtp send` subcommand (basic connection, conversation logging with Rich).
+
+### 2. Build the Conversation Logger
+- Create a reusable `ConversationLogger` class.
+- Wrap any protocol connection to capture sent/received data.
+- Format output with Rich panels and syntax highlighting.
+
+### 3. Add HTTP Subcommand
+- Integrate `httpx.AsyncClient` for HTTP/1.1 and HTTP/2.
+- Commands: `http get`, `http post`.
+- Reuse the `ConversationLogger` via `--verbose`.
+
+### 4. Create Profile Support
+- Define schema with Pydantic.
+- Load profiles from YAML file (`~/.bsw_profiles.yml`).
+- Auto-load or select via `--profile` flag.
+
+### 5. Implement One Extra Module
+- Options: Redis (easy with `redis-py`) or DNS (`dnspython`).
+- Test the plugin architecture and logger reuse.
+
+### 6. Add Parallel Health Check
+- Use `asyncio.gather` to run predefined probes (HTTP, Redis, SMTP).
+- Display color-coded Rich table of results.
+
+### 7. Expand Gradually
+- Add more modules (SSH, MQTT, gRPC) following the same pattern.
+- Build TUI dashboard with Textual for live monitoring (optional).
+
+## Project Name Suggestion
+`probe-cli` – Backend Protocol Swiss Army Knife

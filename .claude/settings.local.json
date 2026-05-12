@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd D:\\\\tools-kit\\\\core; $env:PYTHONIOENCODING='utf-8'; Write-Host \"=== plugins list ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe plugins list; Write-Host \"`n=== http get JSON output ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe http get https://httpbin.org/get --json --param foo=bar; Write-Host \"`n=== http post pretty ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe http post https://httpbin.org/post --json-data '{\\\\\"hello\\\\\":\\\\\"world\\\\\"}')",
+      "PowerShell(cd D:\\\\tools-kit\\\\core; $env:PYTHONIOENCODING='utf-8'; .\\\\.venv\\\\Scripts\\\\xray.exe http get https://httpbin.org/status/204 --verbose 2>&1 | Select-Object -First 40)",
+      "PowerShell(cd D:\\\\tools-kit\\\\core; $env:PYTHONIOENCODING='utf-8'; Write-Host \"=== plugins list ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe plugins list; Write-Host \"`n=== http get with --expect \\(passing\\) ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe http get https://httpbin.org/status/200 --expect \"status == 200\" --expect \"response_time_ms < 5000\"; Write-Host \"Exit: $LASTEXITCODE\"; Write-Host \"`n=== http get with --expect \\(failing\\) ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe http get https://httpbin.org/status/404 --expect \"status == 200\"; Write-Host \"Exit: $LASTEXITCODE\"; Write-Host \"`n=== dns resolve ===\"; .\\\\.venv\\\\Scripts\\\\xray.exe dns resolve google.com --type A --json)",
+      "PowerShell($p = \"D:\\\\tools-kit\\\\app\\\\src-tauri\\\\binaries\"; if \\(Test-Path $p\\) { Get-ChildItem $p } else { \"MISSING: $p\" })",
+      "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;$env:USERPROFILE\\\\AppData\\\\Roaming\\\\Python\\\\Python313\\\\Scripts;$env:PATH\"; cd \"D:\\\\tools-kit\\\\app\"; npm run tauri dev 2>&1)",
+      "PowerShell(Get-ChildItem \"D:\\\\tools-kit\\\\app\\\\src-tauri\\\\icons\" -Force | ForEach-Object { \"$\\($_.Name\\) $\\($_.Length\\)\" })",
+      "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;$env:USERPROFILE\\\\AppData\\\\Roaming\\\\Python\\\\Python313\\\\Scripts;$env:PATH\"; cd \"D:\\\\tools-kit\\\\app\"; npx tauri icon \"src-tauri\\\\icons\\\\icon.png\" 2>&1 | Select-Object -Last 30)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\tools-kit\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "WebSearch"
+    ]
+  }
+}
