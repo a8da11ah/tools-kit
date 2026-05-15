@@ -17,6 +17,7 @@ import ProfilesPage from "./pages/Profiles";
 import SettingsPage from "./pages/Settings";
 import LogsPage     from "./pages/Logs";
 import MonitorsPage from "./pages/Monitors";
+import SslLayout    from "./components/SslLayout";
 import { useHandshake } from "./store/handshake";
 import { useHistory }   from "./store/history";
 import { db }           from "./lib/db";
@@ -131,7 +132,13 @@ export default function App() {
                     <Route path="/"         element={<Navigate to="/request" replace />} />
                     <Route path="/request"  element={<RequestPage />} />
                     <Route path="/smtp"     element={<SmtpPage />} />
-                    <Route path="/tls"      element={<TlsPage />} />
+                    
+                    <Route path="/ssl" element={<SslLayout />}>
+                      <Route index element={<Navigate to="/ssl/tls" replace />} />
+                      <Route path="tls" element={<TlsPage />} />
+                      <Route path="monitors" element={<MonitorsPage />} />
+                    </Route>
+
                     <Route path="/tcp"      element={<TcpPage />} />
                     <Route path="/ws"       element={<WsClientPage />} />
                     <Route path="/database" element={<DatabasePage />} />
@@ -139,7 +146,6 @@ export default function App() {
                     <Route path="/diff"     element={<DiffPage />} />
                     <Route path="/health"   element={<HealthPage />} />
                     <Route path="/replay"   element={<ReplayPage />} />
-                    <Route path="/monitors" element={<MonitorsPage />} />
                     <Route path="/history"  element={<HistoryPage />} />
                     <Route path="/profiles" element={<ProfilesPage />} />
                   </Routes>

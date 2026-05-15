@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 const tools = [
   { to: "/request",  label: "Request",   icon: "→" },
   { to: "/smtp",     label: "SMTP",      icon: "✉" },
-  { to: "/tls",      label: "TLS",       icon: "🔒" },
+  { to: "/ssl",      label: "SSL / DNS", icon: "🔒" },
   { to: "/tcp",      label: "TCP/UDP",   icon: "⇌" },
   { to: "/ws",       label: "WebSocket", icon: "⚡" },
   { to: "/database", label: "Database",  icon: "▤" },
@@ -14,7 +14,6 @@ const tools = [
 ];
 
 const utility = [
-  { to: "/monitors", label: "Monitors",  icon: "⏱" },
   { to: "/history",  label: "History",   icon: "≡" },
   { to: "/profiles", label: "Profiles",  icon: "◈" },
   { to: "/logs",     label: "Logs",      icon: "▦" },
