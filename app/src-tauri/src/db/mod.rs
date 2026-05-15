@@ -1,6 +1,7 @@
 pub mod history;
 pub mod logs;
 pub mod migrations;
+pub mod monitors;
 pub mod profiles;
 pub mod settings;
 

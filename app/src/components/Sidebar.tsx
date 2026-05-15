@@ -14,6 +14,7 @@ const tools = [
 ];
 
 const utility = [
+  { to: "/monitors", label: "Monitors",  icon: "⏱" },
   { to: "/history",  label: "History",   icon: "≡" },
   { to: "/profiles", label: "Profiles",  icon: "◈" },
   { to: "/logs",     label: "Logs",      icon: "▦" },

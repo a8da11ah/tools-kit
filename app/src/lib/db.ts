@@ -49,6 +49,16 @@ export interface ProfileRow {
   updated_at: string;
 }
 
+export interface MonitorRow {
+  id:               string;
+  domain:           string;
+  expected_ip:      string;
+  interval_minutes: number;
+  last_checked:     string | null;
+  status:           string;
+  last_error:       string | null;
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 export const db = {
@@ -143,5 +153,20 @@ export const db = {
 
     delete: (name: string): Promise<void> =>
       invoke<void>("db_delete_profile", { name }),
+  },
+
+  // ── Scheduled Monitors ───────────────────────────────────────────────────
+  monitors: {
+    list: (): Promise<MonitorRow[]> =>
+      invoke<MonitorRow[]>("db_get_monitors"),
+
+    add: (row: MonitorRow): Promise<void> =>
+      invoke<void>("db_add_monitor", { row }),
+
+    updateStatus: (id: string, status: string, lastError: string | null): Promise<void> =>
+      invoke<void>("db_update_monitor_status", { id, status, lastError }),
+
+    delete: (id: string): Promise<void> =>
+      invoke<void>("db_delete_monitor", { id }),
   },
 } as const;

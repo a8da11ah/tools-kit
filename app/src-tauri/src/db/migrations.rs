@@ -19,8 +19,9 @@ pub fn run(conn: &Connection) -> rusqlite::Result<()> {
         v1(conn)?;
     }
 
-    // Future migrations go here:
-    // if current < 2 { v2(conn)?; }
+    if current < 2 {
+        v2(conn)?;
+    }
 
     Ok(())
 }
@@ -73,3 +74,20 @@ fn v1(conn: &Connection) -> rusqlite::Result<()> {
         INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);",
     )
 }
+
+fn v2(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS monitors (
+            id               TEXT PRIMARY KEY,
+            domain           TEXT NOT NULL,
+            expected_ip      TEXT NOT NULL,
+            interval_minutes INTEGER NOT NULL,
+            last_checked     TEXT,
+            status           TEXT NOT NULL DEFAULT 'PENDING',
+            last_error       TEXT
+        );
+        
+        INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);",
+    )
+}
+

@@ -16,10 +16,12 @@ import HistoryPage  from "./pages/History";
 import ProfilesPage from "./pages/Profiles";
 import SettingsPage from "./pages/Settings";
 import LogsPage     from "./pages/Logs";
+import MonitorsPage from "./pages/Monitors";
 import { useHandshake } from "./store/handshake";
 import { useHistory }   from "./store/history";
 import { db }           from "./lib/db";
 import { api }          from "./lib/api";
+import { useScheduler } from "./hooks/useScheduler";
 
 /**
  * One-time migration: import any history stored in the old localStorage key
@@ -104,6 +106,8 @@ export default function App() {
     syncProfiles();
   }, [status]);
 
+  useScheduler();
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-1 overflow-hidden">
@@ -135,6 +139,7 @@ export default function App() {
                     <Route path="/diff"     element={<DiffPage />} />
                     <Route path="/health"   element={<HealthPage />} />
                     <Route path="/replay"   element={<ReplayPage />} />
+                    <Route path="/monitors" element={<MonitorsPage />} />
                     <Route path="/history"  element={<HistoryPage />} />
                     <Route path="/profiles" element={<ProfilesPage />} />
                   </Routes>

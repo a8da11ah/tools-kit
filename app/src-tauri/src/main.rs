@@ -313,6 +313,35 @@ fn db_delete_profile(name: String, state: State<'_, AppState>) -> Result<(), Str
     with_db(&state.db, |c| db::profiles::delete(c, &name))
 }
 
+// ── Commands: monitors ────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn db_get_monitors(state: State<'_, AppState>) -> Result<Vec<db::monitors::MonitorRow>, String> {
+    with_db(&state.db, db::monitors::list)
+}
+
+#[tauri::command]
+fn db_add_monitor(row: db::monitors::MonitorRow, state: State<'_, AppState>) -> Result<(), String> {
+    with_db(&state.db, |c| db::monitors::add(c, &row))
+}
+
+#[tauri::command]
+fn db_update_monitor_status(
+    id: String,
+    status: String,
+    last_error: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    with_db(&state.db, |c| {
+        db::monitors::update_status(c, &id, &status, last_error.as_deref())
+    })
+}
+
+#[tauri::command]
+fn db_delete_monitor(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    with_db(&state.db, |c| db::monitors::delete(c, &id))
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
@@ -391,8 +420,11 @@ fn main() {
             // profiles
             db_get_profiles,
             db_upsert_profile,
-            db_delete_profile,
-        ])
+            db_delete_profile,            // monitors
+            db_get_monitors,
+            db_add_monitor,
+            db_update_monitor_status,
+            db_delete_monitor,        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
