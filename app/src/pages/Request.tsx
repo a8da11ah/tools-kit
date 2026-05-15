@@ -12,6 +12,7 @@ import type {
 import ConversationLog from "../components/ConversationLog";
 import ResponsePane from "../components/ResponsePane";
 import { useHistory } from "../store/history";
+import { generateCurl, generateFetch, generatePython } from "../lib/codegen";
 
 const PROTOCOLS_WITH_HEADERS = new Set(["http"]);
 const PROTOCOLS_WITH_ASSERTIONS = new Set(["http", "redis", "dns", "smtp", "ssh", "mqtt"]);
@@ -60,6 +61,9 @@ export default function RequestPage() {
   const [assertions, setAssertions] = useState<AssertionResult[]>([]);
   const [tab, setTab] = useState<"response" | "log">("response");
   const pushHistory = useHistory((s) => s.push);
+
+  const [codegenOpen, setCodegenOpen] = useState(false);
+  const [codegenTarget, setCodegenTarget] = useState<"curl" | "fetch" | "python">("curl");
 
   const switchProtocol = (p: string) => {
     setProtocol(p);
@@ -133,6 +137,56 @@ export default function RequestPage() {
         >
           {running ? "..." : "Send"}
         </button>
+        {protocol === "http" && (
+          <div className="relative ml-2">
+            <button
+              onClick={() => setCodegenOpen(!codegenOpen)}
+              className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+            >
+              Copy as...
+            </button>
+            {codegenOpen && (
+              <div className="absolute right-0 top-full mt-2 w-[400px] z-50 rounded border border-zinc-700 bg-zinc-900 shadow-xl overflow-hidden">
+                <div className="flex border-b border-zinc-800 bg-zinc-950/50">
+                  {(["curl", "fetch", "python"] as const).map((tgt) => (
+                    <button
+                      key={tgt}
+                      onClick={() => setCodegenTarget(tgt)}
+                      className={`flex-1 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        codegenTarget === tgt ? "bg-zinc-800 text-cyan-400" : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {tgt}
+                    </button>
+                  ))}
+                </div>
+                <div className="p-3">
+                  <textarea
+                    readOnly
+                    value={
+                      codegenTarget === "curl" ? generateCurl(payload)
+                      : codegenTarget === "fetch" ? generateFetch(payload)
+                      : generatePython(payload)
+                    }
+                    className="w-full h-32 rounded bg-black/50 p-2 font-mono text-[10px] text-zinc-300 resize-none outline-none border border-zinc-800 scroll-thin"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => {
+                        const code = codegenTarget === "curl" ? generateCurl(payload) : codegenTarget === "fetch" ? generateFetch(payload) : generatePython(payload);
+                        navigator.clipboard.writeText(code);
+                        setCodegenOpen(false);
+                      }}
+                      className="rounded bg-zinc-700 px-3 py-1 text-xs hover:bg-zinc-600 font-medium"
+                    >
+                      Copy to Clipboard
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 overflow-auto scroll-thin grid grid-cols-1 gap-3 border-b border-zinc-800 p-3 lg:grid-cols-2">
