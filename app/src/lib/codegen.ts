@@ -1,4 +1,4 @@
-import type { RequestPayload } from "../types";
+import type { RequestPayload } from "./types";
 
 export function generateCurl(payload: RequestPayload): string {
   const method = String(payload.meta?.method ?? "GET");
@@ -35,15 +35,7 @@ export function generateFetch(payload: RequestPayload): string {
 
   if (body && typeof body === "string" && body.trim().length > 0) {
     // If it's JSON, don't double stringify in the output string
-    let bodyStr = JSON.stringify(body);
-    try {
-      JSON.parse(body);
-      // It's already valid JSON string, we just dump it as is for readability
-      bodyStr = `JSON.stringify(${body})`;
-    } catch {
-      // Keep it as a raw string
-    }
-    options.body = "__BODY__MAGIC__"; 
+    options.body = "__BODY__MAGIC__";
   }
 
   const optionsStr = JSON.stringify(options, null, 2).replace('"__BODY__MAGIC__"', body ? (

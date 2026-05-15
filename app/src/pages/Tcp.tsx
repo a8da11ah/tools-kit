@@ -2,7 +2,7 @@ import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import { streamRequest } from "../lib/ws";
 import type { AssertionResult, ConversationEvent, ResponsePayload } from "../lib/types";
-import { buildHexDump, type HexDumpLine } from "../lib/hexdump";
+import { buildHexDump } from "../lib/hexdump";
 import ConversationLog from "../components/ConversationLog";
 import ResponsePane from "../components/ResponsePane";
 import { useHistory } from "../store/history";

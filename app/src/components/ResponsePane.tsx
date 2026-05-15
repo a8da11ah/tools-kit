@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import Editor from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 import type { AssertionResult, ResponsePayload } from "../lib/types";
 
 function statusClass(status: number | string) {
@@ -38,6 +40,13 @@ export default function ResponsePane({
   response: ResponsePayload | null;
   assertions: AssertionResult[];
 }) {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const triggerSearch = () => {
+    editorRef.current?.focus();
+    editorRef.current?.getAction("actions.find")?.run();
+  };
+
   if (!response) {
     return <div className="p-6 text-sm text-zinc-500">No response yet. Send a request.</div>;
   }
@@ -53,6 +62,13 @@ export default function ResponsePane({
           {String((response.meta as { http_version?: string })?.http_version ?? "")}
         </span>
         <span className="text-zinc-500">{response.timing_ms.toFixed(1)} ms</span>
+        <button
+          onClick={triggerSearch}
+          title="Search response body (Ctrl+F)"
+          className="ml-auto rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+        >
+          🔍 Search
+        </button>
       </div>
       <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-3">
         <div className="lg:col-span-1">
@@ -96,7 +112,14 @@ export default function ResponsePane({
               language={lang}
               value={pretty(body, lang)}
               theme="vs-dark"
-              options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, wordWrap: "on" }}
+              onMount={(ed: editor.IStandaloneCodeEditor) => { editorRef.current = ed; }}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                fontSize: 12,
+                wordWrap: "on",
+                find: { seedSearchStringFromSelection: "selection", autoFindInSelection: "never" },
+              }}
             />
           </div>
         </div>

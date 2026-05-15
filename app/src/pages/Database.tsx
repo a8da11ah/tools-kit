@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { streamRequest } from "../lib/ws";
-import type { AssertionResult, ConversationEvent, ResponsePayload } from "../lib/types";
+import type { ConversationEvent, ResponsePayload } from "../lib/types";
 import ConversationLog from "../components/ConversationLog";
 import { useHistory } from "../store/history";
 
