@@ -2,6 +2,7 @@ import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import { streamRequest } from "../lib/ws";
 import type { AssertionResult, ConversationEvent, ResponsePayload } from "../lib/types";
+import { buildHexDump, type HexDumpLine } from "../lib/hexdump";
 import ConversationLog from "../components/ConversationLog";
 import ResponsePane from "../components/ResponsePane";
 import { useHistory } from "../store/history";
@@ -15,7 +16,7 @@ type Encoding  = "text" | "hex";
 /** Normalise hex input: strip spaces / colons, upper-case, return null if invalid chars */
 function normaliseHex(raw: string): string | null {
   const stripped = raw.replace(/[\s:]/g, "").toUpperCase();
-  if (stripped.length % 2 !== 0) return null;              // incomplete byte
+  if (stripped.length > 0 && stripped.length % 2 !== 0) return null; // incomplete byte
   if (!/^[0-9A-F]*$/.test(stripped)) return null;          // bad characters
   return stripped;
 }
@@ -29,33 +30,13 @@ function hexToBase64(hex: string): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-/** Try to decode bytes back to UTF-8, replace non-printable bytes with · */
-function bytesToUtf8Preview(hexOrB64: string, encoding: "hex" | "base64"): string {
-  try {
-    let raw: string;
-    if (encoding === "hex") {
-      const bytes = new Uint8Array(hexOrB64.length / 2);
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hexOrB64.slice(i * 2, i * 2 + 2), 16);
-      }
-      raw = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-    } else {
-      raw = atob(hexOrB64);
-    }
-    // replace control chars except TAB / LF / CR with middle dot
-    return raw.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "·");
-  } catch {
-    return "(decode error)";
-  }
-}
-
 // ── Receive meta panel ────────────────────────────────────────────────────────
 function RecvPanel({ response }: { response: ResponsePayload }) {
   const meta = response.meta as Record<string, unknown>;
   const recvHex   = typeof meta.recv_hex   === "string" ? meta.recv_hex   : null;
   const recvBytes = typeof meta.recv_bytes === "number" ? meta.recv_bytes : null;
 
-  const preview = recvHex ? bytesToUtf8Preview(recvHex, "hex") : null;
+  const hexLines = recvHex ? buildHexDump(recvHex, 16) : null;
 
   if (!recvHex && recvBytes === null) {
     return (
@@ -66,10 +47,10 @@ function RecvPanel({ response }: { response: ResponsePayload }) {
   }
 
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-4 p-4">
       {/* Summary row */}
-      <div className="flex items-center gap-4">
-        <span className="font-mono text-xs font-semibold text-cyan-400">
+      <div className="flex items-center gap-4 border-b border-zinc-800/60 pb-3">
+        <span className="rounded border border-cyan-800 bg-cyan-900/30 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-400">
           {String(response.status)}
         </span>
         {recvBytes !== null && (
@@ -82,30 +63,45 @@ function RecvPanel({ response }: { response: ResponsePayload }) {
         </span>
       </div>
 
-      {/* Hex dump */}
-      {recvHex && (
+      {/* Hex dump view */}
+      {hexLines && hexLines.length > 0 && (
         <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Received Hex
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            Hex Dump viewer
           </div>
-          <pre className="overflow-x-auto rounded border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-[10px] text-zinc-300 scroll-thin whitespace-pre-wrap break-all">
-            {recvHex}
-          </pre>
-        </div>
-      )}
-
-      {/* UTF-8 preview */}
-      {preview && (
-        <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            UTF-8 Preview
-            <span className="ml-2 font-normal normal-case text-zinc-600">
-              (non-printable bytes shown as ·)
-            </span>
+          <div className="overflow-x-auto rounded border border-zinc-800 bg-zinc-950 p-3 shadow-inner">
+            <table className="font-mono text-[11px] leading-tight w-full">
+              <tbody>
+                {hexLines.map((line, i) => (
+                  <tr key={i} className="hover:bg-zinc-900/50 group whitespace-nowrap">
+                    {/* Offset */}
+                    <td className="pr-4 text-zinc-600 font-semibold select-none group-hover:text-cyan-600">
+                      {line.offsetHex}
+                    </td>
+                    {/* Hex columns */}
+                    <td className="pr-4 text-zinc-300">
+                      {/* Left half (8 bytes) */}
+                      <span className="mr-3 inline-block w-[11.5rem]">
+                        {line.hexBytes.slice(0, 8).join(" ")}
+                      </span>
+                      {/* Right half (8 bytes) */}
+                      <span className="inline-block w-[11.5rem]">
+                        {line.hexBytes.slice(8, 16).join(" ")}
+                      </span>
+                    </td>
+                    {/* ASCII Representation */}
+                    <td className="border-l border-zinc-800 pl-3 tracking-widest text-[#a8b8c2]">
+                      {line.asciiChars.map((char, j) => (
+                        <span key={j} className={char === "." ? "text-zinc-600 opacity-50" : ""}>
+                          {char}
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <pre className="overflow-x-auto rounded border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-[10px] text-zinc-300 scroll-thin whitespace-pre-wrap break-words">
-            {preview}
-          </pre>
         </div>
       )}
     </div>
