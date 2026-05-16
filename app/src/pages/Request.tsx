@@ -20,7 +20,11 @@ import AuthEditor, {
 import BodyEditor, {
   type BodyType,
   type FormField,
+  type MultipartPart,
+  type GraphqlBody,
   serializeForm,
+  serializeGraphql,
+  serializeMultipart,
 } from "../components/http/BodyEditor";
 import { useHistory }  from "../store/history";
 import { useProfiles } from "../store/profile";
@@ -31,8 +35,10 @@ import Spinner from "../components/Spinner";
 import { toast } from "../store/toasts";
 import { useCollections } from "../store/collections";
 import { usePendingLoad } from "../store/pendingLoad";
+import { useCookies } from "../store/cookies";
 import CollectionsPanel from "../components/http/CollectionsPanel";
 import SaveRequestModal from "../components/http/SaveRequestModal";
+import ImportOpenApiModal from "../components/http/ImportOpenApiModal";
 import { validateHttpRequest, hasErrors, type ValidationIssue } from "../lib/validate";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -94,6 +100,8 @@ export default function RequestPage() {
   const [bodyType,   setBodyType]   = useState<BodyType>("none");
   const [bodyText,   setBodyText]   = useState("");
   const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [multipartParts, setMultipartParts] = useState<MultipartPart[]>([]);
+  const [graphql, setGraphql] = useState<GraphqlBody>({ query: "", variables: "" });
 
   // ── Codegen state ─────────────────────────────────────────────────────────
   const [codegenOpen,   setCodegenOpen]   = useState(false);
@@ -107,6 +115,7 @@ export default function RequestPage() {
   // ── Collections state ─────────────────────────────────────────────────────
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [saveModalOpen,   setSaveModalOpen]   = useState(false);
+  const [openApiOpen,     setOpenApiOpen]     = useState(false);
   /** When non-null, saving will update this existing item. */
   const [editingItemId,   setEditingItemId]   = useState<string | null>(null);
   const [editingName,     setEditingName]     = useState("");
@@ -155,6 +164,8 @@ export default function RequestPage() {
     setBodyType("none");
     setBodyText("");
     setFormFields([]);
+    setMultipartParts([]);
+    setGraphql({ query: "", variables: "" });
   };
 
   /**
@@ -188,6 +199,25 @@ export default function RequestPage() {
     } else if (bodyType === "binary") {
       body = bodyText || null;
       bodyEncoding = "base64";
+    } else if (bodyType === "graphql") {
+      try {
+        body = serializeGraphql(graphql);
+      } catch (e) {
+        // Surface as a stub body; the validation strip already warned the user.
+        body = JSON.stringify({ query: graphql.query, _error: String(e) });
+      }
+      if (!mergedHeaders["Content-Type"] && !mergedHeaders["content-type"]) {
+        mergedHeaders["Content-Type"] = "application/json";
+      }
+    } else if (bodyType === "multipart") {
+      const enabled = multipartParts.filter((p) => p.enabled && p.name);
+      if (enabled.length > 0) {
+        const { contentType, base64 } = serializeMultipart(multipartParts);
+        body = base64;
+        bodyEncoding = "base64";
+        // Always replace Content-Type — boundary changes each send.
+        mergedHeaders["Content-Type"] = contentType;
+      }
     }
 
     // Append apikey query param
@@ -195,6 +225,14 @@ export default function RequestPage() {
     if (authParam) {
       const sep = target.includes("?") ? "&" : "?";
       target = `${target}${sep}${encodeURIComponent(authParam.key)}=${encodeURIComponent(authParam.value)}`;
+    }
+
+    // Auto-merge cookies from the jar. User-set Cookie header wins.
+    const hasUserCookie =
+      Object.keys(mergedHeaders).some((k) => k.toLowerCase() === "cookie");
+    if (!hasUserCookie) {
+      const cookieHeader = useCookies.getState().headerFor(target);
+      if (cookieHeader) mergedHeaders["Cookie"] = cookieHeader;
     }
 
     const built: RequestPayload = {
@@ -226,6 +264,9 @@ export default function RequestPage() {
         setResponse(r);
         setAssertions(asrts);
         pushHistory({ payload: effective, result: { response: r, events: collectedEvents, assertions: asrts, passed } });
+        // Capture any Set-Cookie headers for the cookie jar.
+        const sc = r.headers["set-cookie"] ?? r.headers["Set-Cookie"];
+        if (sc) useCookies.getState().capture(sc, effective.target).catch(() => {});
       },
       onError: (err) => {
         setEvents((prev) => [...prev, { direction: "info", data: `error: ${err}`, ts: Date.now() }]);
@@ -456,6 +497,15 @@ export default function RequestPage() {
               Import cURL
             </button>
 
+            {/* Import OpenAPI */}
+            <button
+              onClick={() => setOpenApiOpen(true)}
+              title="Import an OpenAPI 3.x or Swagger 2.0 spec into Collections"
+              className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+            >
+              Import OpenAPI
+            </button>
+
             {/* Copy as */}
             <div className="relative">
               <button
@@ -624,9 +674,13 @@ export default function RequestPage() {
                 bodyType={bodyType}
                 body={bodyText}
                 formFields={formFields}
+                multipartParts={multipartParts}
+                graphql={graphql}
                 onBodyTypeChange={setBodyType}
                 onBodyChange={setBodyText}
                 onFormFieldsChange={setFormFields}
+                onMultipartChange={setMultipartParts}
+                onGraphqlChange={setGraphql}
               />
             )}
 
@@ -723,6 +777,15 @@ export default function RequestPage() {
           await handleSaveCollection(name, folder);
         }}
         onClose={() => setSaveModalOpen(false)}
+      />
+
+      <ImportOpenApiModal
+        open={openApiOpen}
+        onClose={() => {
+          setOpenApiOpen(false);
+          // Auto-reveal the panel so the user sees their fresh import
+          setCollectionsOpen(true);
+        }}
       />
 
       </div>

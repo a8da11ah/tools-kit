@@ -18,6 +18,7 @@ import DiffPage     from "./pages/Diff";
 import HealthPage   from "./pages/Health";
 import ReplayPage   from "./pages/Replay";
 import HistoryPage  from "./pages/History";
+import CookiesPage  from "./pages/Cookies";
 import ProfilesPage from "./pages/Profiles";
 import SettingsPage from "./pages/Settings";
 import LogsPage     from "./pages/Logs";
@@ -27,6 +28,7 @@ import { useHandshake } from "./store/handshake";
 import { useHistory }   from "./store/history";
 import { useProfiles }  from "./store/profile";
 import { useCollections } from "./store/collections";
+import { useCookies }    from "./store/cookies";
 import { db }           from "./lib/db";
 import { api }          from "./lib/api";
 import { useScheduler } from "./hooks/useScheduler";
@@ -113,6 +115,7 @@ export default function App() {
     useHistory.getState().load();
     useProfiles.getState().load();
     useCollections.getState().load();
+    useCookies.getState().load();
     syncProfiles();
   }, [status]);
 
@@ -161,6 +164,7 @@ export default function App() {
                     <Route path="/health"   element={<HealthPage />} />
                     <Route path="/replay"   element={<ReplayPage />} />
                     <Route path="/history"  element={<HistoryPage />} />
+                    <Route path="/cookies"  element={<CookiesPage />} />
                     <Route path="/profiles" element={<ProfilesPage />} />
                   </Routes>
                 )
