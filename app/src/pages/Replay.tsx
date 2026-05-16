@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import { load as yamlLoad } from "js-yaml";
 import { api } from "../lib/api";
 import type { RequestPayload, RequestResult } from "../lib/types";
+import Spinner from "../components/Spinner";
 
 const SAMPLE_YAML = `version: 1
 name: smoke
@@ -94,9 +95,10 @@ export default function ReplayPage() {
         <button
           onClick={run}
           disabled={running}
-          className="rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
-          {running ? "..." : "Run replay"}
+          {running && <Spinner size={12} className="text-zinc-950" />}
+          {running ? "Running…" : "Run replay"}
         </button>
       </div>
       <div className="grid flex-1 grid-cols-2 overflow-hidden">

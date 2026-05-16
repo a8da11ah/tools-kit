@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { db, type LogRow } from "../lib/db";
+import { confirm } from "../store/confirm";
+import { toast } from "../store/toasts";
 
 const PAGE = 100;
 
@@ -75,13 +77,22 @@ export default function LogsPage() {
   }, [autoRefresh, levelFilter, sourceFilter]);
 
   const handleClear = async () => {
-    if (!confirm("Clear all log entries?")) return;
+    const ok = await confirm({
+      title: "Clear all log entries?",
+      body:  "This permanently deletes every stored log line. The action cannot be undone.",
+      confirmLabel: "Clear logs",
+      danger: true,
+    });
+    if (!ok) return;
     setClearing(true);
     try {
       await db.logs.clear();
       setRows([]);
       setOffset(0);
       setHasMore(false);
+      toast.success("Logs cleared");
+    } catch (e) {
+      toast.error("Failed to clear logs", { detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setClearing(false);
     }

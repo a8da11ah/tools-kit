@@ -6,6 +6,7 @@ import { buildHexDump } from "../lib/hexdump";
 import ConversationLog from "../components/ConversationLog";
 import ResponsePane from "../components/ResponsePane";
 import { useHistory } from "../store/history";
+import Spinner from "../components/Spinner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Protocol = "tcp" | "udp";
@@ -246,9 +247,10 @@ export default function TcpPage() {
         <button
           onClick={fire}
           disabled={running || !canSend}
-          className="rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
-          {running ? "..." : "Send"}
+          {running && <Spinner size={12} className="text-zinc-950" />}
+          {running ? "Sending…" : "Send"}
         </button>
       </div>
 

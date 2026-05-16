@@ -1,8 +1,26 @@
 import { useHistory } from "../store/history";
+import { confirm } from "../store/confirm";
+import { toast } from "../store/toasts";
 
 export default function HistoryPage() {
   const items = useHistory((s) => s.items);
   const clear = useHistory((s) => s.clear);
+
+  const handleClear = async () => {
+    const ok = await confirm({
+      title: "Clear all request history?",
+      body:  `This permanently deletes ${items.length} stored request${items.length === 1 ? "" : "s"}.`,
+      confirmLabel: "Clear history",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await clear();
+      toast.success("History cleared");
+    } catch (e) {
+      toast.error("Failed to clear history", { detail: e instanceof Error ? e.message : String(e) });
+    }
+  };
 
   if (items.length === 0) {
     return (
@@ -16,7 +34,7 @@ export default function HistoryPage() {
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm">{items.length} requests</div>
         <button
-          onClick={clear}
+          onClick={handleClear}
           className="rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800"
         >
           Clear

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { db } from "../lib/db";
 import { api, type ProfileAuth } from "../lib/api";
+import { confirm } from "../store/confirm";
+import { toast } from "../store/toasts";
 
 interface LocalProfile {
   vars_json: string;
@@ -175,12 +177,21 @@ export default function ProfilesPage() {
   };
 
   const handleDelete = async (name: string) => {
+    const ok = await confirm({
+      title: `Delete profile "${name}"?`,
+      body:  "Variables and auth config for this profile will be permanently removed.",
+      confirmLabel: "Delete profile",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await db.profiles.delete(name);
       await api.profiles.delete(name).catch(() => {}); // best-effort daemon sync
       await load();
+      toast.success(`Profile "${name}" deleted`);
     } catch (e) {
       setError(String(e));
+      toast.error(`Failed to delete "${name}"`, { detail: e instanceof Error ? e.message : String(e) });
     }
   };
 

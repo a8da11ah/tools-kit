@@ -2,6 +2,11 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
+import Toaster from "./components/Toaster";
+import ConfirmDialog from "./components/ConfirmDialog";
+import CommandPalette from "./components/CommandPalette";
+import ShortcutsOverlay from "./components/ShortcutsOverlay";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import RequestPage  from "./pages/Request";
 import SmtpPage     from "./pages/Smtp";
 import TlsPage      from "./pages/Tls";
@@ -110,9 +115,14 @@ export default function App() {
   }, [status]);
 
   useScheduler();
+  useGlobalShortcuts();
 
   return (
     <div className="flex h-full flex-col">
+      <Toaster />
+      <CommandPalette />
+      <ShortcutsOverlay />
+      <ConfirmDialog />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-auto scroll-thin">

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
 import { api } from "../lib/api";
 import type { ResponsePayload } from "../lib/types";
+import Spinner from "../components/Spinner";
 
 export default function DiffPage() {
   const [leftUrl, setLeftUrl] = useState("https://httpbin.org/get?env=staging");
@@ -62,9 +63,10 @@ export default function DiffPage() {
         <button
           onClick={run}
           disabled={running}
-          className="rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
-          {running ? "..." : "Diff"}
+          {running && <Spinner size={12} className="text-zinc-950" />}
+          {running ? "Diffing…" : "Diff"}
         </button>
       </div>
 

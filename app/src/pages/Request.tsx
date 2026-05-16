@@ -27,6 +27,8 @@ import { useProfiles } from "../store/profile";
 import { interpolatePayload, unresolvedInPayload } from "../lib/interpolate";
 import { parseCurl }   from "../lib/curlimport";
 import { generateCurl, generateFetch, generatePython } from "../lib/codegen";
+import Spinner from "../components/Spinner";
+import { toast } from "../store/toasts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -187,8 +189,10 @@ export default function RequestPage() {
         setAssertions(asrts);
         pushHistory({ payload: effective, result: { response: r, events: collectedEvents, assertions: asrts, passed } });
       },
-      onError: (err) =>
-        setEvents((prev) => [...prev, { direction: "info", data: `error: ${err}`, ts: Date.now() }]),
+      onError: (err) => {
+        setEvents((prev) => [...prev, { direction: "info", data: `error: ${err}`, ts: Date.now() }]);
+        toast.error("Request failed", { detail: String(err) });
+      },
       onClose: () => setRunning(false),
     });
   };
@@ -298,6 +302,7 @@ export default function RequestPage() {
         {/* URL input */}
         <div className="relative flex-1">
           <input
+            data-shortcut="url"
             value={payload.target}
             onChange={(e) => setPayload({ ...payload, target: e.target.value })}
             placeholder="target / URL"
@@ -331,9 +336,10 @@ export default function RequestPage() {
         <button
           onClick={send}
           disabled={running}
-          className="rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
-          {running ? "..." : "Send"}
+          {running && <Spinner size={12} className="text-zinc-950" />}
+          {running ? "Sending…" : "Send"}
         </button>
 
         {/* HTTP extras */}

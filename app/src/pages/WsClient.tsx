@@ -4,6 +4,7 @@ import { streamRequest } from "../lib/ws";
 import type { ConversationEvent, ResponsePayload } from "../lib/types";
 import ConversationLog from "../components/ConversationLog";
 import { useHistory } from "../store/history";
+import Spinner from "../components/Spinner";
 
 interface WsMessage {
   direction: "send" | "recv" | "ping";
@@ -116,9 +117,10 @@ export default function WsClientPage() {
         <button
           onClick={fire}
           disabled={running || !url.trim()}
-          className="rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
-          {running ? "..." : doPing ? "Ping" : "Connect"}
+          {running && <Spinner size={12} className="text-zinc-950" />}
+          {running ? "Working…" : doPing ? "Ping" : "Connect"}
         </button>
       </div>
 
