@@ -29,6 +29,11 @@ import { parseCurl }   from "../lib/curlimport";
 import { generateCurl, generateFetch, generatePython } from "../lib/codegen";
 import Spinner from "../components/Spinner";
 import { toast } from "../store/toasts";
+import { useCollections } from "../store/collections";
+import { usePendingLoad } from "../store/pendingLoad";
+import CollectionsPanel from "../components/http/CollectionsPanel";
+import SaveRequestModal from "../components/http/SaveRequestModal";
+import { validateHttpRequest, hasErrors, type ValidationIssue } from "../lib/validate";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -99,8 +104,41 @@ export default function RequestPage() {
   const [curlInput,     setCurlInput]     = useState("");
   const [curlError,     setCurlError]     = useState("");
 
+  // ── Collections state ─────────────────────────────────────────────────────
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const [saveModalOpen,   setSaveModalOpen]   = useState(false);
+  /** When non-null, saving will update this existing item. */
+  const [editingItemId,   setEditingItemId]   = useState<string | null>(null);
+  const [editingName,     setEditingName]     = useState("");
+  const [editingFolder,   setEditingFolder]   = useState("");
+  const addCollection    = useCollections((s) => s.add);
+  const updateCollection = useCollections((s) => s.update);
+
   // Load profiles once
   useEffect(() => { loadProfiles(); }, []);
+
+  // ── Pending load (from History "Re-run" or Collections "Load") ───────────
+  const consumePending = usePendingLoad((s) => s.consume);
+  useEffect(() => {
+    const p = consumePending();
+    if (!p) return;
+    setProtocol(p.payload.protocol);
+    setPayload(p.payload);
+    setEvents([]);
+    setResponse(null);
+    setAssertions([]);
+    // Restore editor state if the source captured it.
+    const ed = p.editor ?? {};
+    if (ed.auth)       setAuth(ed.auth as AuthConfig);
+    else               setAuth(AUTH_NONE);
+    if (typeof ed.bodyType === "string") setBodyType(ed.bodyType as BodyType);
+    else                                 setBodyType("none");
+    setBodyText(typeof ed.bodyText === "string" ? ed.bodyText : "");
+    setFormFields(Array.isArray(ed.formFields) ? (ed.formFields as FormField[]) : []);
+    toast.info(
+      p.source === "history" ? "Loaded from history" : "Loaded from collection",
+    );
+  }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -267,13 +305,68 @@ export default function RequestPage() {
   const vars       = activeVars();
   const unresolved = unresolvedInPayload(payload, vars);
 
+  // ── Validation (HTTP only) ────────────────────────────────────────────────
+  const issues: ValidationIssue[] = protocol === "http"
+    ? validateHttpRequest(payload, bodyType, bodyText)
+    : [];
+  const blocked = hasErrors(issues);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // ── Save handler (used by SaveRequestModal) ───────────────────────────────
+  const handleSaveCollection = async (name: string, folder: string) => {
+    const editor = { auth, bodyType, bodyText, formFields };
+    if (editingItemId) {
+      await updateCollection(editingItemId, { name, folder, payload, editor });
+    } else {
+      const id = await addCollection({ name, folder, payload, editor });
+      setEditingItemId(id);
+      setEditingName(name);
+      setEditingFolder(folder);
+    }
+  };
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full">
+      {collectionsOpen && (
+        <CollectionsPanel
+          onLoad={(item) => {
+            setProtocol(item.payload.protocol);
+            setPayload(item.payload);
+            setEvents([]);
+            setResponse(null);
+            setAssertions([]);
+            const ed = item.editor ?? {};
+            setAuth((ed.auth as AuthConfig) ?? AUTH_NONE);
+            setBodyType((ed.bodyType as BodyType) ?? "none");
+            setBodyText(typeof ed.bodyText === "string" ? ed.bodyText : "");
+            setFormFields(Array.isArray(ed.formFields) ? (ed.formFields as FormField[]) : []);
+            setEditingItemId(item.id);
+            setEditingName(item.name);
+            setEditingFolder(item.folder);
+            toast.info(`Loaded "${item.name}"`);
+          }}
+        />
+      )}
+
+      <div className="flex h-full min-w-0 flex-1 flex-col">
 
       {/* ── Top toolbar ── */}
       <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-2 text-sm">
+
+        {/* Collections toggle */}
+        <button
+          onClick={() => setCollectionsOpen((v) => !v)}
+          title={collectionsOpen ? "Hide collections" : "Show collections"}
+          aria-pressed={collectionsOpen}
+          className={`rounded border px-2 py-1 font-mono text-xs ${
+            collectionsOpen
+              ? "border-cyan-600 bg-cyan-950/40 text-cyan-200"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+          }`}
+        >
+          ☰
+        </button>
 
         {/* Protocol selector */}
         <select
@@ -335,7 +428,8 @@ export default function RequestPage() {
         {/* Send */}
         <button
           onClick={send}
-          disabled={running}
+          disabled={running || blocked}
+          title={blocked ? issues.find((i) => i.severity === "error")?.message : undefined}
           className="inline-flex items-center gap-1.5 rounded bg-cyan-500 px-4 py-1 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 disabled:opacity-50"
         >
           {running && <Spinner size={12} className="text-zinc-950" />}
@@ -345,6 +439,15 @@ export default function RequestPage() {
         {/* HTTP extras */}
         {protocol === "http" && (
           <>
+            {/* Save to collection */}
+            <button
+              onClick={() => setSaveModalOpen(true)}
+              title={editingItemId ? `Update "${editingName}"` : "Save to collection"}
+              className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+            >
+              {editingItemId ? "Update" : "Save"}
+            </button>
+
             {/* Import cURL */}
             <button
               onClick={() => { setCurlModalOpen(true); setCurlError(""); }}
@@ -409,6 +512,25 @@ export default function RequestPage() {
           </>
         )}
       </div>
+
+      {/* ── Validation strip ── */}
+      {issues.length > 0 && (
+        <div className="border-b border-zinc-800 bg-zinc-950/50 px-3 py-1.5">
+          {issues.map((iss, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-2 text-[11px] ${
+                iss.severity === "error" ? "text-rose-300" : "text-amber-300"
+              }`}
+            >
+              <span className="font-mono">{iss.severity === "error" ? "✕" : "!"}</span>
+              <span>
+                <span className="font-mono text-zinc-500">[{iss.field}]</span> {iss.message}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── cURL import modal ── */}
       {curlModalOpen && (
@@ -588,6 +710,21 @@ export default function RequestPage() {
         ) : (
           <ConversationLog events={events} />
         )}
+      </div>
+
+      <SaveRequestModal
+        open={saveModalOpen}
+        existingId={editingItemId}
+        initialName={editingName}
+        initialFolder={editingFolder}
+        onSave={async (name, folder) => {
+          setEditingName(name);
+          setEditingFolder(folder);
+          await handleSaveCollection(name, folder);
+        }}
+        onClose={() => setSaveModalOpen(false)}
+      />
+
       </div>
     </div>
   );

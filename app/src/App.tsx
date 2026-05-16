@@ -26,6 +26,7 @@ import SslLayout    from "./components/SslLayout";
 import { useHandshake } from "./store/handshake";
 import { useHistory }   from "./store/history";
 import { useProfiles }  from "./store/profile";
+import { useCollections } from "./store/collections";
 import { db }           from "./lib/db";
 import { api }          from "./lib/api";
 import { useScheduler } from "./hooks/useScheduler";
@@ -111,6 +112,7 @@ export default function App() {
     migrateLocalStorageHistory();
     useHistory.getState().load();
     useProfiles.getState().load();
+    useCollections.getState().load();
     syncProfiles();
   }, [status]);
 
