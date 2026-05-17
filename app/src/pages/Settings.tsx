@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { db, type StorageInfo } from "../lib/db";
+import { confirm } from "../store/confirm";
+import { toast } from "../store/toasts";
 
 function fmtBytes(bytes: number): string {
   if (bytes < 1024)       return `${bytes} B`;
@@ -9,12 +11,28 @@ function fmtBytes(bytes: number): string {
 
 type FolderChangeResult = "copied" | "restored" | null;
 
+const BACKUP_VERSION = 1;
+
+interface BackupPayload {
+  version:    number;
+  exportedAt: string;
+  settings:   Record<string, string>;
+  profiles:   Array<{ name: string; vars_json: string; auth_json: string | null }>;
+  monitors:   Array<{
+    id: string; domain: string; expected_ip: string;
+    interval_minutes: number; last_checked: string | null;
+    status: string; last_error: string | null;
+  }>;
+}
+
 export default function SettingsPage() {
   const [info, setInfo]       = useState<StorageInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [changing, setChanging] = useState(false);
   const [lastResult, setLastResult] = useState<FolderChangeResult>(null);
   const [error, setError]     = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,6 +46,110 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Logical backup — gathers settings, profiles, and monitors into a JSON file.
+   * Skips history and logs (high-churn, low-recovery-value, and large).
+   */
+  const handleExport = async () => {
+    setError(null);
+    setExporting(true);
+    try {
+      const [settings, profiles, monitors] = await Promise.all([
+        db.settings.getAll(),
+        db.profiles.list(),
+        db.monitors.list(),
+      ]);
+      const payload: BackupPayload = {
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        settings,
+        profiles: profiles.map((p) => ({
+          name: p.name, vars_json: p.vars_json, auth_json: p.auth_json,
+        })),
+        monitors: monitors.map((m) => ({
+          id: m.id, domain: m.domain, expected_ip: m.expected_ip,
+          interval_minutes: m.interval_minutes,
+          last_checked: m.last_checked,
+          status: m.status, last_error: m.last_error,
+        })),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `xray-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Exported ${profiles.length} profile${profiles.length === 1 ? "" : "s"}, `
+          + `${monitors.length} monitor${monitors.length === 1 ? "" : "s"}, `
+          + `${Object.keys(settings).length} setting${Object.keys(settings).length === 1 ? "" : "s"}`,
+      );
+    } catch (e) {
+      toast.error("Export failed", { detail: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (file: File) => {
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || "")) as BackupPayload;
+        if (typeof parsed.version !== "number") throw new Error("Not a valid backup file.");
+        if (parsed.version > BACKUP_VERSION) {
+          throw new Error(`Backup is from a newer version (${parsed.version}).`);
+        }
+        const profileCount = parsed.profiles?.length ?? 0;
+        const monitorCount = parsed.monitors?.length ?? 0;
+        const settingCount = parsed.settings ? Object.keys(parsed.settings).length : 0;
+        const ok = await confirm({
+          title: "Restore from backup?",
+          body:
+            `This will merge ${profileCount} profile(s), ${monitorCount} monitor(s), `
+            + `and ${settingCount} setting(s) into your current database. `
+            + `Existing entries with the same key will be overwritten.`,
+          confirmLabel: "Restore",
+        });
+        if (!ok) return;
+        setImporting(true);
+        try {
+          if (parsed.settings) {
+            for (const [k, v] of Object.entries(parsed.settings)) {
+              await db.settings.set(k, v);
+            }
+          }
+          if (parsed.profiles) {
+            for (const p of parsed.profiles) {
+              await db.profiles.upsert(p.name, p.vars_json, p.auth_json);
+            }
+          }
+          if (parsed.monitors) {
+            for (const m of parsed.monitors) {
+              await db.monitors.add({
+                id: m.id, domain: m.domain, expected_ip: m.expected_ip,
+                interval_minutes: m.interval_minutes,
+                last_checked: m.last_checked,
+                status: m.status, last_error: m.last_error,
+              }).catch(() => {/* duplicate id — skip */});
+            }
+          }
+          await load();
+          toast.success("Backup restored. You may want to reload the app to pick up restored settings.");
+        } finally {
+          setImporting(false);
+        }
+      } catch (e) {
+        toast.error("Import failed", { detail: e instanceof Error ? e.message : String(e) });
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleChangeFolder = async () => {
     setError(null);
@@ -101,6 +223,40 @@ export default function SettingsPage() {
         >
           {changing ? "Opening…" : "Change folder…"}
         </button>
+      </section>
+
+      {/* Backup / Restore */}
+      <section className="mb-6 rounded border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Backup &amp; Restore
+        </div>
+        <p className="mb-3 text-xs text-zinc-500">
+          Export a portable JSON snapshot of your settings, profiles, and monitors.
+          History and logs are excluded to keep the file small — use the storage
+          folder for full DB sync.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {exporting ? "Exporting…" : "Export backup…"}
+          </button>
+          <label className={`cursor-pointer rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800 ${importing ? "pointer-events-none opacity-50" : ""}`}>
+            {importing ? "Restoring…" : "Restore from backup…"}
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImport(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </section>
 
       {/* Restore hint */}

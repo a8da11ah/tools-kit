@@ -3,7 +3,7 @@ import { db, type LogRow } from "../lib/db";
 import { confirm } from "../store/confirm";
 import { toast } from "../store/toasts";
 
-const PAGE = 100;
+const PAGE_OPTIONS = [50, 100, 250, 500];
 
 const LEVEL_COLORS: Record<string, string> = {
   INFO:  "text-zinc-400",
@@ -27,6 +27,8 @@ export default function LogsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [levelFilter, setLevelFilter]   = useState<string>("");
   const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [search, setSearch]         = useState("");
+  const [pageSize, setPageSize]     = useState(100);
   const [clearing, setClearing]     = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,7 +39,7 @@ export default function LogsPage() {
       setLoading(true);
       try {
         const fresh = await db.logs.list(
-          PAGE,
+          pageSize,
           reset ? 0 : off,
           levelFilter  || undefined,
           sourceFilter || undefined,
@@ -49,19 +51,19 @@ export default function LogsPage() {
           setRows((prev) => [...prev, ...fresh]);
           setOffset(off + fresh.length);
         }
-        setHasMore(fresh.length === PAGE);
+        setHasMore(fresh.length === pageSize);
       } finally {
         setLoading(false);
       }
     },
-    [offset, levelFilter, sourceFilter],
+    [offset, levelFilter, sourceFilter, pageSize],
   );
 
-  // Reset when filters change.
+  // Reset when filters or page size change.
   useEffect(() => {
     fetchPage(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levelFilter, sourceFilter]);
+  }, [levelFilter, sourceFilter, pageSize]);
 
   // Auto-refresh every 3 s.
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function LogsPage() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, levelFilter, sourceFilter]);
+  }, [autoRefresh, levelFilter, sourceFilter, pageSize]);
 
   const handleClear = async () => {
     const ok = await confirm({
@@ -101,6 +103,12 @@ export default function LogsPage() {
   // Collect unique sources from loaded rows for the source filter dropdown.
   const sources = Array.from(new Set(rows.map((r) => r.source))).sort();
 
+  // Free-text filter over already-loaded rows.
+  const searchLower = search.toLowerCase().trim();
+  const visibleRows = searchLower
+    ? rows.filter((r) => r.message.toLowerCase().includes(searchLower))
+    : rows;
+
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -124,6 +132,24 @@ export default function LogsPage() {
           <option value="">All sources</option>
           {sources.map((s) => (
             <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search message…"
+          className="min-w-[180px] flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs outline-none focus:border-cyan-700"
+        />
+
+        <select
+          value={pageSize}
+          onChange={(e) => setPageSize(Number(e.target.value))}
+          title="Rows per fetch"
+          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+        >
+          {PAGE_OPTIONS.map((n) => (
+            <option key={n} value={n}>{n}/page</option>
           ))}
         </select>
 
@@ -156,11 +182,13 @@ export default function LogsPage() {
 
       {/* Log list */}
       <div className="flex-1 overflow-auto scroll-thin p-3 font-mono text-xs">
-        {rows.length === 0 && !loading ? (
-          <div className="text-zinc-600">No log entries yet.</div>
+        {visibleRows.length === 0 && !loading ? (
+          <div className="text-zinc-600">
+            {rows.length === 0 ? "No log entries yet." : "No entries match the current search."}
+          </div>
         ) : (
           <div className="space-y-px">
-            {rows.map((r) => (
+            {visibleRows.map((r) => (
               <div key={r.id} className="flex gap-2 rounded px-1 py-0.5 hover:bg-zinc-800/40">
                 <span className="shrink-0 text-[10px] text-zinc-600">
                   {r.timestamp.replace("T", " ").slice(0, 19)}
@@ -194,8 +222,11 @@ export default function LogsPage() {
 
       {/* Footer count */}
       <div className="border-t border-zinc-800 px-3 py-1 text-[10px] text-zinc-600">
-        {rows.length} line{rows.length !== 1 ? "s" : ""} loaded
-        {levelFilter || sourceFilter ? " (filtered)" : ""}
+        {searchLower
+          ? `${visibleRows.length} of ${rows.length} loaded match "${search}"`
+          : `${rows.length} line${rows.length !== 1 ? "s" : ""} loaded${
+              levelFilter || sourceFilter ? " (filtered)" : ""
+            }`}
       </div>
     </div>
   );

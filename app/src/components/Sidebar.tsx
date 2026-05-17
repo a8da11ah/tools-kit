@@ -11,6 +11,7 @@ const tools = [
   { to: "/diff",     label: "Diff",      icon: "⇄" },
   { to: "/health",   label: "Health",    icon: "♥" },
   { to: "/replay",   label: "Replay",    icon: "↻" },
+  { to: "/utils",    label: "Utilities", icon: "✱" },
 ];
 
 const utility = [

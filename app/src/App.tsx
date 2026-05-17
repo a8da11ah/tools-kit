@@ -19,6 +19,7 @@ import HealthPage   from "./pages/Health";
 import ReplayPage   from "./pages/Replay";
 import HistoryPage  from "./pages/History";
 import CookiesPage  from "./pages/Cookies";
+import UtilsPage    from "./pages/Utils";
 import ProfilesPage from "./pages/Profiles";
 import SettingsPage from "./pages/Settings";
 import LogsPage     from "./pages/Logs";
@@ -135,6 +136,7 @@ export default function App() {
             {/* Storage pages — always available, no daemon needed */}
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs"     element={<LogsPage />} />
+            <Route path="/utils"    element={<UtilsPage />} />
 
             {/* All other pages require a live daemon */}
             <Route

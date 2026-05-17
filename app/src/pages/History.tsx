@@ -1,14 +1,43 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistory, type HistoryItem } from "../store/history";
 import { confirm } from "../store/confirm";
 import { toast } from "../store/toasts";
 import { usePendingLoad } from "../store/pendingLoad";
 
+type StatusFilter = "all" | "pass" | "fail";
+
 export default function HistoryPage() {
   const items = useHistory((s) => s.items);
   const clear = useHistory((s) => s.clear);
   const setPending = usePendingLoad((s) => s.set);
   const navigate = useNavigate();
+
+  const [query,    setQuery]    = useState("");
+  const [protocol, setProtocol] = useState<string>("");
+  const [status,   setStatus]   = useState<StatusFilter>("all");
+  const [limit,    setLimit]    = useState(50);
+
+  const protocols = useMemo(() => {
+    const s = new Set<string>();
+    items.forEach((it) => s.add(it.payload.protocol));
+    return Array.from(s).sort();
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    return items.filter((it) => {
+      if (protocol && it.payload.protocol !== protocol) return false;
+      if (status === "pass" && !it.result.passed) return false;
+      if (status === "fail" &&  it.result.passed) return false;
+      if (!q) return true;
+      const hay =
+        `${it.payload.target} ${String(it.payload.meta?.method ?? "")} ${it.result.response.status}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [items, query, protocol, status]);
+
+  const visible = filtered.slice(0, limit);
 
   const handleClear = async () => {
     const ok = await confirm({
@@ -52,17 +81,53 @@ export default function HistoryPage() {
   }
   return (
     <div className="p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm">{items.length} request{items.length === 1 ? "" : "s"}</div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search URL, method, or status…"
+          className="flex-1 min-w-[200px] rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-cyan-700"
+        />
+        <select
+          value={protocol}
+          onChange={(e) => setProtocol(e.target.value)}
+          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300"
+        >
+          <option value="">All protocols</option>
+          {protocols.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <div className="flex overflow-hidden rounded border border-zinc-700">
+          {(["all", "pass", "fail"] as StatusFilter[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`px-2 py-1 text-xs ${
+                status === s
+                  ? "bg-zinc-700 text-zinc-100"
+                  : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs text-zinc-500">
+          {filtered.length} / {items.length}
+        </div>
         <button
           onClick={handleClear}
-          className="rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800"
+          className="ml-auto rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800"
         >
           Clear
         </button>
       </div>
+      {filtered.length === 0 ? (
+        <div className="rounded border border-zinc-800 bg-zinc-900/40 p-6 text-center text-xs text-zinc-500">
+          No matches.
+        </div>
+      ) : (
       <div className="space-y-2">
-        {items.map((it) => (
+        {visible.map((it) => (
           <div
             key={it.id}
             className="group rounded border border-zinc-800 bg-zinc-900/40 p-2 text-xs font-mono"
@@ -99,7 +164,16 @@ export default function HistoryPage() {
             </div>
           </div>
         ))}
+        {filtered.length > visible.length && (
+          <button
+            onClick={() => setLimit((l) => l + 50)}
+            className="block w-full rounded border border-zinc-800 bg-zinc-900/40 py-2 text-xs text-zinc-400 hover:bg-zinc-800"
+          >
+            Show more ({filtered.length - visible.length} remaining)
+          </button>
+        )}
       </div>
+      )}
     </div>
   );
 }

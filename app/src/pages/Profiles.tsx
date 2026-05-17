@@ -176,6 +176,83 @@ export default function ProfilesPage() {
     }
   };
 
+  /** Save current profiles to a downloadable JSON file. */
+  const handleExport = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profiles,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `xray-profiles-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${names.length} profile${names.length === 1 ? "" : "s"}`);
+  };
+
+  /** Load profiles from a JSON file selected by the user (merges, not replaces). */
+  const handleImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || "")) as {
+          profiles?: ProfileMap;
+        };
+        const incoming = parsed.profiles ?? {};
+        const names = Object.keys(incoming);
+        if (names.length === 0) {
+          toast.warn("No profiles found in this file.");
+          return;
+        }
+        const ok = await confirm({
+          title: `Import ${names.length} profile${names.length === 1 ? "" : "s"}?`,
+          body:  `Existing profiles with the same name will be overwritten:\n${names.join(", ")}`,
+          confirmLabel: "Import",
+        });
+        if (!ok) return;
+        for (const [name, p] of Object.entries(incoming)) {
+          await db.profiles.upsert(name, p.vars_json, p.auth_json);
+          const vars = JSON.parse(p.vars_json || "{}");
+          const auth = p.auth_json ? JSON.parse(p.auth_json) : null;
+          await api.profiles.upsert(name, vars, auth).catch(() => {});
+        }
+        await load();
+        toast.success(`Imported ${names.length} profile${names.length === 1 ? "" : "s"}`);
+      } catch (e) {
+        toast.error("Import failed", { detail: e instanceof Error ? e.message : String(e) });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDuplicate = async (sourceName: string) => {
+    const p = profiles[sourceName];
+    if (!p) return;
+    // Pick the next available "<name> copy" / "<name> copy 2" suffix.
+    let suffix = "copy";
+    let n = 1;
+    while (profiles[`${sourceName} ${suffix}`]) {
+      n++;
+      suffix = `copy ${n}`;
+    }
+    const newName = `${sourceName} ${suffix}`;
+    try {
+      await db.profiles.upsert(newName, p.vars_json, p.auth_json);
+      const vars = JSON.parse(p.vars_json || "{}");
+      const auth = p.auth_json ? JSON.parse(p.auth_json) : null;
+      await api.profiles.upsert(newName, vars, auth).catch(() => {});
+      await load();
+      toast.success(`Duplicated as "${newName}"`);
+    } catch (e) {
+      toast.error("Duplicate failed", { detail: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
   const handleDelete = async (name: string) => {
     const ok = await confirm({
       title: `Delete profile "${name}"?`,
@@ -203,12 +280,34 @@ export default function ProfilesPage() {
         <span className="text-sm text-zinc-400">
           {names.length} profile{names.length !== 1 ? "s" : ""} — stored in xray.db
         </span>
-        <button
-          onClick={() => setEditing("new")}
-          className="ml-auto rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800"
-        >
-          + New profile
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={names.length === 0}
+            className="rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800 disabled:opacity-50"
+          >
+            Export
+          </button>
+          <label className="cursor-pointer rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800">
+            Import
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImport(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
+            onClick={() => setEditing("new")}
+            className="rounded border border-zinc-700 px-3 py-1 text-xs hover:bg-zinc-800"
+          >
+            + New profile
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -263,6 +362,13 @@ export default function ProfilesPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs">
+                      <button
+                        onClick={() => handleDuplicate(name)}
+                        title="Duplicate profile"
+                        className="text-zinc-500 hover:text-zinc-300"
+                      >
+                        duplicate
+                      </button>
                       <button
                         onClick={() => setEditing(name)}
                         className="text-zinc-500 hover:text-zinc-300"
